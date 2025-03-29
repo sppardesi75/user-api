@@ -33,6 +33,11 @@ app.use(cors());
 app.use(passport.initialize());
 
 // User Registration
+// Root Route - Shows that the API is running
+app.get("/", (req, res) => {
+    res.send("User API is up and running!");
+});
+
 app.post("/api/user/register", (req, res) => {
     userService.registerUser(req.body)
         .then((msg) => {
