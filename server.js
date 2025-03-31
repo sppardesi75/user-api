@@ -9,8 +9,18 @@ const bodyParser = require('body-parser');
 
 const app = express();
 app.use(cors());
-app.options('*', cors()); 
 app.use(bodyParser.json());
+
+// ✅ Manual CORS headers for Vercel + localhost
+app.use((req, res, next) => {
+  res.setHeader("Access-Control-Allow-Origin", "*"); 
+  res.setHeader("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+  next();
+});
 
 // Env variables
 const MONGO_URL = process.env.MONGO_URL;
@@ -56,7 +66,6 @@ function checkUser(userName, password) {
   });
 }
 
-// Login
 app.post('/api/user/login', (req, res) => {
   const { userName, password } = req.body;
   if (!userName || !password) return res.status(400).json({ error: "Missing userName or password" });
@@ -70,7 +79,6 @@ app.post('/api/user/login', (req, res) => {
     .catch(() => res.status(401).json({ error: "Invalid credentials" }));
 });
 
-// Register
 app.post('/api/user/register', (req, res) => {
   const { userName, password } = req.body;
   if (!userName || !password) return res.status(400).json({ error: "Missing userName or password" });
@@ -134,6 +142,5 @@ app.delete('/api/user/history/:id', passport.authenticate('jwt', { session: fals
     .catch(() => res.status(500).json({ error: "Database error" }));
 });
 
-// Start the server
 const port = process.env.PORT || 3000;
 app.listen(port, () => console.log(`User API listening on port ${port}`));
