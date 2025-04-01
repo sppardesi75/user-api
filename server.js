@@ -1,4 +1,6 @@
 require('dotenv').config();
+require('pg'); // explicitly require the "pg" module
+const Sequelize = require('sequelize');
 const express = require('express');
 const cors = require('cors');
 const passport = require('passport');
@@ -6,12 +8,14 @@ const passportJWT = require('passport-jwt');
 const jwt = require('jsonwebtoken');
 const { MongoClient, ObjectId } = require('mongodb');
 const bodyParser = require('body-parser');
+app.set('views', __dirname + '/views');
+
 
 const app = express();
 app.use(cors());
 app.options('*', cors()); // Handle preflight OPTIONS requests
 app.use(bodyParser.json());
-
+app.use(express.static(__dirname + '/public'));
 // Env variables
 const MONGO_URL = process.env.MONGO_URL;
 const JWT_SECRET = process.env.JWT_SECRET;
