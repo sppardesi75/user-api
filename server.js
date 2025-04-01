@@ -1,21 +1,22 @@
 require('dotenv').config();
-require('pg'); // explicitly require the "pg" module
-const Sequelize = require('sequelize');
 const express = require('express');
 const cors = require('cors');
 const passport = require('passport');
 const passportJWT = require('passport-jwt');
 const jwt = require('jsonwebtoken');
 const { MongoClient, ObjectId } = require('mongodb');
-const bodyParser = require('body-parser');
-app.set('views', __dirname + '/views');
-
 
 const app = express();
+
+// Set views and static assets if needed
+app.set('views', __dirname + '/views');
+app.use(express.static(__dirname + '/public'));
+
+// Use CORS and built-in JSON parser
 app.use(cors());
 app.options('*', cors()); // Handle preflight OPTIONS requests
-app.use(bodyParser.json());
-app.use(express.static(__dirname + '/public'));
+app.use(express.json());
+
 // Env variables
 const MONGO_URL = process.env.MONGO_URL;
 const JWT_SECRET = process.env.JWT_SECRET;
@@ -35,7 +36,7 @@ async function connectToDatabase() {
         useNewUrlParser: true,
         useUnifiedTopology: true
       });
-      db = client.db(); // Use the default database from your connection string
+      db = client.db(); // Uses the default database from your connection string
       console.log("Connected to MongoDB");
     } catch (err) {
       console.error("MongoDB connection error:", err);
@@ -107,7 +108,7 @@ app.post('/api/user/register', async (req, res) => {
 
     const result = await usersCollection.insertOne({
       userName,
-      password, // Note: Hash in production!
+      password, // Reminder: In production, hash passwords!
       favourites: [],
       history: []
     });
