@@ -102,12 +102,23 @@ app.get('/api/user/history', passport.authenticate('jwt', { session: false }), a
 
 app.put('/api/user/history/:id', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {
-    const history = await userService.addHistory(req.user._id, req.params.id);
-    res.json(history);
+    const database = await connectToDatabase();
+
+    // FIX: decodeURIComponent to allow query strings
+    const historyItem = decodeURIComponent(req.params.id);
+
+    await database.collection('users').updateOne(
+      { _id: req.user._id },
+      { $addToSet: { history: historyItem } }
+    );
+
+    res.json({ message: "History updated" });
   } catch (err) {
-    res.status(500).json({ error: err });
+    console.error("History PUT error:", err);
+    res.status(500).json({ error: "Database error" });
   }
 });
+
 
 app.delete('/api/user/history/:id', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {
