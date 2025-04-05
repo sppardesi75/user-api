@@ -7,58 +7,31 @@ const jwt = require('jsonwebtoken');
 const { MongoClient, ObjectId } = require('mongodb');
 
 const app = express();
-
-// Set views and static assets if needed
-app.set('views', __dirname + '/views');
-app.use(express.static(__dirname + '/public'));
-
-// Use CORS and built-in JSON parser
 app.use(cors());
-app.options('*', cors()); // Handle preflight OPTIONS requests
+app.options('*', cors());
 app.use(express.json());
 
-// Env variables
-const MONGO_URL = process.env.MONGO_URL;
-const JWT_SECRET = process.env.JWT_SECRET;
-if (!MONGO_URL || !JWT_SECRET) {
-  console.error("Error: Missing MONGO_URL or JWT_SECRET in .env file.");
-  process.exit(1);
-}
+const userService = require('./user-service');
 
-// Global DB variable
-let db;
-
-// Helper function to ensure DB connection is established
-async function connectToDatabase() {
-  if (!db) {
-    try {
-      const client = await MongoClient.connect(MONGO_URL, {
-        useNewUrlParser: true,
-        useUnifiedTopology: true
-      });
-      db = client.db(); // Uses the default database from your connection string
-      console.log("Connected to MongoDB");
-    } catch (err) {
-      console.error("MongoDB connection error:", err);
-      throw err;
-    }
-  }
-  return db;
-}
+// Connect to Mongoose (user-service)
+userService.connect()
+  .then(() => console.log("✅ Connected to user-service (Mongoose)"))
+  .catch((err) => {
+    console.error("❌ Failed to connect user-service:", err);
+    process.exit(1);
+  });
 
 // JWT Setup
 const ExtractJwt = passportJWT.ExtractJwt;
 const JwtStrategy = passportJWT.Strategy;
 const opts = {
   jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
-  secretOrKey: JWT_SECRET
+  secretOrKey: process.env.JWT_SECRET
 };
 
 passport.use(new JwtStrategy(opts, async (jwt_payload, done) => {
   try {
-    const database = await connectToDatabase();
-    const usersCollection = database.collection('users');
-    const user = await usersCollection.findOne({ _id: ObjectId(jwt_payload._id) });
+    const user = await userService.checkUser({ userName: jwt_payload.userName });
     return user ? done(null, user) : done(null, false);
   } catch (err) {
     return done(err, false);
@@ -67,132 +40,83 @@ passport.use(new JwtStrategy(opts, async (jwt_payload, done) => {
 
 app.use(passport.initialize());
 
-// Helper: Check user credentials
-function checkUser(userName, password) {
-  return connectToDatabase().then(database => {
-    return database.collection('users').findOne({ userName, password }).then(user => {
-      if (user) return user;
-      throw "Invalid credentials";
-    });
-  });
-}
-
 // Login
 app.post('/api/user/login', async (req, res) => {
   try {
-    const { userName, password } = req.body;
-    if (!userName || !password)
-      return res.status(400).json({ error: "Missing userName or password" });
-
-    const user = await checkUser(userName, password);
+    const user = await userService.checkUser(req.body);
     const payload = { _id: user._id, userName: user.userName };
-    const token = jwt.sign(payload, JWT_SECRET, { expiresIn: '1h' });
+    const token = jwt.sign(payload, process.env.JWT_SECRET, { expiresIn: '1h' });
     res.json({ message: "User authenticated", token });
   } catch (err) {
-    res.status(401).json({ error: "Invalid credentials" });
+    res.status(401).json({ error: err });
   }
 });
 
 // Register
 app.post('/api/user/register', async (req, res) => {
   try {
-    const { userName, password } = req.body;
-    if (!userName || !password)
-      return res.status(400).json({ error: "Missing userName or password" });
-
-    const database = await connectToDatabase();
-    const usersCollection = database.collection('users');
-    const existingUser = await usersCollection.findOne({ userName });
-    if (existingUser)
-      return res.status(400).json({ error: "User already exists" });
-
-    const result = await usersCollection.insertOne({
-      userName,
-      password, // Reminder: In production, hash passwords!
-      favourites: [],
-      history: []
-    });
-    res.json({ message: "User registered", userId: result.insertedId });
+    const result = await userService.registerUser(req.body);
+    res.json({ message: result });
   } catch (err) {
-    res.status(500).json({ error: "Database error" });
+    res.status(400).json({ error: err });
   }
 });
 
 // Favourites
 app.get('/api/user/favourites', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {
-    const database = await connectToDatabase();
-    const user = await database.collection('users').findOne({ _id: req.user._id });
-    if (user) res.json({ favourites: user.favourites || [] });
-    else res.status(404).json({ error: "User not found" });
+    const favs = await userService.getFavourites(req.user._id);
+    res.json(favs);
   } catch (err) {
-    res.status(500).json({ error: "Database error" });
+    res.status(500).json({ error: err });
   }
 });
 
 app.put('/api/user/favourites/:id', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {
-    const database = await connectToDatabase();
-    await database.collection('users').updateOne(
-      { _id: req.user._id },
-      { $addToSet: { favourites: req.params.id } }
-    );
-    res.json({ message: "Favourite added" });
+    const favs = await userService.addFavourite(req.user._id, req.params.id);
+    res.json(favs);
   } catch (err) {
-    res.status(500).json({ error: "Database error" });
+    res.status(500).json({ error: err });
   }
 });
 
 app.delete('/api/user/favourites/:id', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {
-    const database = await connectToDatabase();
-    await database.collection('users').updateOne(
-      { _id: req.user._id },
-      { $pull: { favourites: req.params.id } }
-    );
-    res.json({ message: "Favourite removed" });
+    const favs = await userService.removeFavourite(req.user._id, req.params.id);
+    res.json(favs);
   } catch (err) {
-    res.status(500).json({ error: "Database error" });
+    res.status(500).json({ error: err });
   }
 });
 
 // History
 app.get('/api/user/history', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {
-    const database = await connectToDatabase();
-    const user = await database.collection('users').findOne({ _id: req.user._id });
-    if (user) res.json({ history: user.history || [] });
-    else res.status(404).json({ error: "User not found" });
+    const history = await userService.getHistory(req.user._id);
+    res.json(history);
   } catch (err) {
-    res.status(500).json({ error: "Database error" });
+    res.status(500).json({ error: err });
   }
 });
 
 app.put('/api/user/history/:id', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {
-    const database = await connectToDatabase();
-    await database.collection('users').updateOne(
-      { _id: req.user._id },
-      { $addToSet: { history: req.params.id } }
-    );
-    res.json({ message: "History updated" });
+    const history = await userService.addHistory(req.user._id, req.params.id);
+    res.json(history);
   } catch (err) {
-    res.status(500).json({ error: "Database error" });
+    res.status(500).json({ error: err });
   }
 });
 
 app.delete('/api/user/history/:id', passport.authenticate('jwt', { session: false }), async (req, res) => {
   try {
-    const database = await connectToDatabase();
-    await database.collection('users').updateOne(
-      { _id: req.user._id },
-      { $pull: { history: req.params.id } }
-    );
-    res.json({ message: "History item removed" });
+    const history = await userService.removeHistory(req.user._id, req.params.id);
+    res.json(history);
   } catch (err) {
-    res.status(500).json({ error: "Database error" });
+    res.status(500).json({ error: err });
   }
 });
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`User API listening on port ${port}`));
+app.listen(port, () => console.log(`✅ User API listening on port ${port}`));
