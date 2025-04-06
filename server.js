@@ -120,6 +120,10 @@ app.delete("/api/user/history/:id",
       .catch(msg => res.status(422).json({ error: msg }));
   });
 
+  app.get("/", (req, res) => {
+    res.send("User API running");
+  });
+
 // ✅ Start server after DB connection
 userService.connect()
   .then(() => {
