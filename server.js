@@ -11,7 +11,24 @@ dotenv.config();
 
 const HTTP_PORT = process.env.PORT || 8080;
 
-// Passport JWT strategy setup
+// ✅ CORS Options (based on assignment guide)
+const corsOptions = {
+  origin: [
+    "http://localhost:3000",
+    "http://192.168.2.24:3000",
+    "https://your-frontend.vercel.app" // replace with actual deployed frontend URL
+  ],
+  methods: "GET,POST,PUT,DELETE,OPTIONS",
+  allowedHeaders: ["Content-Type", "Authorization"]
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // ✅ Responds to preflight requests
+
+app.use(express.json());
+app.use(passport.initialize());
+
+// ✅ Passport JWT strategy
 const JwtStrategy = passportJWT.Strategy;
 const ExtractJwt = passportJWT.ExtractJwt;
 
@@ -22,50 +39,21 @@ const jwtOptions = {
 
 passport.use(new JwtStrategy(jwtOptions, (jwt_payload, done) => {
   userService.getUserById(jwt_payload._id)
-    .then(user => {
-      if (user) return done(null, user);
-      else return done(null, false);
-    })
+    .then(user => user ? done(null, user) : done(null, false))
     .catch(err => done(err, false));
 }));
 
-app.use(express.json());
-const corsOptions = {
-  origin: function (origin, callback) {
-    const allowedOrigins = [
-      "http://localhost:3000",
-      "http://192.168.2.24:3000",
-      "https://your-frontend.vercel.app" // replace with your deployed frontend
-    ];
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error("CORS not allowed"));
-    }
-  },
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"]
-};
-
-app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
-app.use(passport.initialize());
-
-// Routes
-
+// ✅ Routes
 app.post("/api/user/register", (req, res) => {
   userService.registerUser(req.body)
-    .then((msg) => res.json({ "message": msg }))
-    .catch((msg) => res.status(422).json({ "message": msg }));
+    .then((msg) => res.json({ message: msg }))
+    .catch((msg) => res.status(422).json({ message: msg }));
 });
 
 app.post("/api/user/login", (req, res) => {
   userService.checkUser(req.body)
     .then((user) => {
-      const payload = {
-        _id: user._id,
-        userName: user.userName
-      };
+      const payload = { _id: user._id, userName: user.userName };
       const token = jwt.sign(payload, process.env.JWT_SECRET);
       res.json({ message: "login successful", token });
     })
@@ -120,6 +108,7 @@ app.delete("/api/user/history/:id",
       .catch(msg => res.status(422).json({ error: msg }));
   });
 
+// ✅ Connect to DB and start server
 userService.connect()
   .then(() => {
     app.listen(HTTP_PORT, () => {
