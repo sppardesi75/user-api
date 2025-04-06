@@ -23,7 +23,9 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // ✅ Responds to preflight requests
+app.options("*", cors(corsOptions), (req, res) => {
+  res.status(200).send("ok"); 
+});
 
 app.use(express.json());
 app.use(passport.initialize());
