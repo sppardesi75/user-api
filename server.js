@@ -11,6 +11,24 @@ dotenv.config();
 
 const HTTP_PORT = process.env.PORT || 8080;
 
+// CORS setup
+const corsOptions = {
+  origin: [
+    "http://localhost:3000",
+    "http://192.168.2.24:3000", // your LAN dev IP
+    "https://user-qo09owjgx-sanskarpardesi-gmailcoms-projects.vercel.app" // frontend deployed on Vercel
+  ],
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+  credentials: true
+};
+
+app.use(cors(corsOptions));
+app.options("*", cors(corsOptions)); // 💥 handle preflight OPTIONS request
+
+app.use(express.json());
+app.use(passport.initialize());
+
 // Passport JWT strategy setup
 const JwtStrategy = passportJWT.Strategy;
 const ExtractJwt = passportJWT.ExtractJwt;
@@ -22,23 +40,16 @@ const jwtOptions = {
 
 passport.use(new JwtStrategy(jwtOptions, (jwt_payload, done) => {
   userService.getUserById(jwt_payload._id)
-    .then(user => {
-      if (user) return done(null, user);
-      else return done(null, false);
-    })
+    .then(user => user ? done(null, user) : done(null, false))
     .catch(err => done(err, false));
 }));
-
-app.use(express.json());
-app.use(cors());
-app.use(passport.initialize());
 
 // Routes
 
 app.post("/api/user/register", (req, res) => {
   userService.registerUser(req.body)
-    .then((msg) => res.json({ "message": msg }))
-    .catch((msg) => res.status(422).json({ "message": msg }));
+    .then((msg) => res.json({ message: msg }))
+    .catch((msg) => res.status(422).json({ message: msg }));
 });
 
 app.post("/api/user/login", (req, res) => {
