@@ -31,18 +31,24 @@ passport.use(new JwtStrategy(jwtOptions, (jwt_payload, done) => {
 
 app.use(express.json());
 const corsOptions = {
-  origin: [
-    "http://localhost:3000",
-    "http://192.168.2.24:3000",
-    "https://your-frontend.vercel.app" // replace with your actual frontend URL
-  ],
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      "http://localhost:3000",
+      "http://192.168.2.24:3000",
+      "https://your-frontend.vercel.app" // replace with your deployed frontend
+    ];
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("CORS not allowed"));
+    }
+  },
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 };
 
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions)); // handles preflight requests
-
+app.options("*", cors(corsOptions));
 app.use(passport.initialize());
 
 // Routes
