@@ -8,29 +8,35 @@ const passportJWT = require("passport-jwt");
 const userService = require("./user-service.js");
 
 dotenv.config();
-
 const HTTP_PORT = process.env.PORT || 8080;
 
-// ✅ CORS Options (based on assignment guide)
+// ✅ CORS Setup
 const corsOptions = {
-  origin: [
-    "http://localhost:3000",
-    "http://192.168.2.24:3000",
-    "https://your-frontend.vercel.app" // replace with actual deployed frontend URL
-  ],
-  methods: "GET,POST,PUT,DELETE,OPTIONS",
+  origin: function (origin, callback) {
+    const allowedOrigins = [
+      "http://localhost:3000",
+      "http://192.168.2.24:3000",
+      "https://your-frontend.vercel.app" // ⬅️ replace with your real frontend URL
+    ];
+    if (!origin || allowedOrigins.includes(origin)) {
+      callback(null, true);
+    } else {
+      callback(new Error("CORS not allowed"));
+    }
+  },
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"]
 };
 
 app.use(cors(corsOptions));
 app.options("*", cors(corsOptions), (req, res) => {
-  res.status(200).send("ok"); 
+  res.status(200).send("ok"); // 🔥 Needed for Vercel to reply 200 on OPTIONS
 });
 
 app.use(express.json());
 app.use(passport.initialize());
 
-// ✅ Passport JWT strategy
+// ✅ JWT Setup
 const JwtStrategy = passportJWT.Strategy;
 const ExtractJwt = passportJWT.ExtractJwt;
 
@@ -45,16 +51,20 @@ passport.use(new JwtStrategy(jwtOptions, (jwt_payload, done) => {
     .catch(err => done(err, false));
 }));
 
-// ✅ Routes
+// ✅ API Routes
+app.get("/", (req, res) => {
+  res.send("User API is running.");
+});
+
 app.post("/api/user/register", (req, res) => {
   userService.registerUser(req.body)
-    .then((msg) => res.json({ message: msg }))
-    .catch((msg) => res.status(422).json({ message: msg }));
+    .then(msg => res.json({ message: msg }))
+    .catch(msg => res.status(422).json({ message: msg }));
 });
 
 app.post("/api/user/login", (req, res) => {
   userService.checkUser(req.body)
-    .then((user) => {
+    .then(user => {
       const payload = { _id: user._id, userName: user.userName };
       const token = jwt.sign(payload, process.env.JWT_SECRET);
       res.json({ message: "login successful", token });
@@ -110,7 +120,7 @@ app.delete("/api/user/history/:id",
       .catch(msg => res.status(422).json({ error: msg }));
   });
 
-// ✅ Connect to DB and start server
+// ✅ Start server after DB connection
 userService.connect()
   .then(() => {
     app.listen(HTTP_PORT, () => {
